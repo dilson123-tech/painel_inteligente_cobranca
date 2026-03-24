@@ -6,4 +6,4 @@ id,nome,telefone,contrato,produto,valor_atraso,dias_atraso,ultimo_contato,canal_
 5,Eliane Rocha,47999990005,CTR-1005,Credito Rural,12400.00,95,2026-03-10,Ligacao,Negociando,Quer parcelar,Nao,,Valor alto
 6,Fabio Costa,47999990006,CTR-1006,Emprestimo Pessoal,1500.00,21,2026-03-19,WhatsApp,Sem resposta,,Nao,,Visualiza e nao responde
 7,Gabriela Martins,47999990007,CTR-1007,Financiamento,980.00,14,2026-03-22,WhatsApp,Prometeu pagar,Aguardando data combinada,Sim,2026-03-25,Retornar se nao pagar
-8,Henrique Silva,47999990008,CTR-1008,Credito Empresarial,18750.00,120,2026-03-08,Ligacao,Escalar analise,Sem acordo inicial,Nao,,Caso sensivel
+8,Henrique Silva,47999990008,CTR-1008,Credito Empresarial,18750.00,120,2026-03-08,Ligacao,Encaminhar para análise,Sem acordo inicial,Nao,,Caso sensivel
