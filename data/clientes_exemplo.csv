@@ -1,0 +1,9 @@
+id,nome,telefone,contrato,produto,valor_atraso,dias_atraso,ultimo_contato,canal_preferido,status_cobranca,resposta_cliente,promessa_pagamento,data_promessa,observacoes
+1,Ana Souza,47999990001,CTR-1001,Emprestimo Pessoal,850.00,12,2026-03-20,WhatsApp,Sem contato,,Nao,,
+2,Bruno Lima,47999990002,CTR-1002,Credito Consignado,2450.00,38,2026-03-18,Ligacao,Contatado,Disse que vai verificar,Sim,2026-03-26,Cliente pediu prazo curto
+3,Carla Mendes,47999990003,CTR-1003,Financiamento,6200.00,67,2026-03-15,Ligacao,Sem resposta,,Nao,,Nao atende de manhã
+4,Diego Alves,47999990004,CTR-1004,Emprestimo Pessoal,430.00,7,2026-03-21,WhatsApp,Contatado,Disse que paga sexta,Sim,2026-03-28,Historico bom
+5,Eliane Rocha,47999990005,CTR-1005,Credito Rural,12400.00,95,2026-03-10,Ligacao,Negociando,Quer parcelar,Nao,,Valor alto
+6,Fabio Costa,47999990006,CTR-1006,Emprestimo Pessoal,1500.00,21,2026-03-19,WhatsApp,Sem resposta,,Nao,,Visualiza e nao responde
+7,Gabriela Martins,47999990007,CTR-1007,Financiamento,980.00,14,2026-03-22,WhatsApp,Prometeu pagar,Aguardando data combinada,Sim,2026-03-25,Retornar se nao pagar
+8,Henrique Silva,47999990008,CTR-1008,Credito Empresarial,18750.00,120,2026-03-08,Ligacao,Escalar analise,Sem acordo inicial,Nao,,Caso sensivel
