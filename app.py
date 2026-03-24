@@ -1,5 +1,7 @@
+from pathlib import Path
 import pandas as pd
 import streamlit as st
+from src.mailer import get_missing_smtp_vars, send_bulk_emails
 
 st.set_page_config(page_title="Painel Inteligente de Cobrança", layout="wide")
 
@@ -227,8 +229,8 @@ st.markdown(
 )
 
 @st.cache_data
-def carregar_dados():
-    return pd.read_csv("data/clientes_exemplo.csv")
+def carregar_dados(csv_path: str, csv_mtime_ns: int):
+    return pd.read_csv(csv_path)
 
 def moeda(valor):
     return f'R$ {valor:,.2f}'.replace(",", "X").replace(".", ",").replace("X", ".")
@@ -331,7 +333,17 @@ def render_metric_card(label, value):
 def render_insight(texto):
     st.markdown(f'<div class="insight-card">{texto}</div>', unsafe_allow_html=True)
 
-df = carregar_dados()
+csv_path = "data/clientes_exemplo.csv"
+csv_mtime_ns = Path(csv_path).stat().st_mtime_ns
+df = carregar_dados(csv_path, csv_mtime_ns)
+
+for coluna, valor_padrao in {
+    "email": "",
+    "telefone": "",
+    "consentimento_contato": "Nao",
+}.items():
+    if coluna not in df.columns:
+        df[coluna] = valor_padrao
 df["faixa_atraso"] = df["dias_atraso"].apply(classificar_faixa)
 df["prioridade"] = df.apply(calcular_prioridade, axis=1)
 df["proxima_acao"] = df.apply(sugerir_acao, axis=1)
@@ -591,19 +603,228 @@ st.dataframe(
     use_container_width=True,
 )
 
-st.subheader("Top 5 clientes críticos")
-top5 = df[df["prioridade"] == "Alta"].copy()
-top5 = top5.sort_values(by=["ordem_prioridade", "dias_atraso", "valor_atraso"], ascending=[True, False, False]).head(5)
+if "historico_contatos" not in st.session_state:
+    st.session_state["historico_contatos"] = []
 
-if top5.empty:
-    st.info("Nenhum cliente em prioridade alta no momento.")
-else:
-    st.dataframe(
-        top5[["nome", "produto", "valor_atraso", "dias_atraso", "status_cobranca", "proxima_acao"]].style.format({"valor_atraso": moeda}),
-        use_container_width=True,
+st.subheader("Ação operacional")
+op1, op2 = st.columns([1.2, 0.8])
+
+with op1:
+    selecionados = st.multiselect(
+        "Selecionar clientes para contato",
+        df_view["nome"].tolist(),
+    )
+    canal_contato = st.selectbox(
+        "Canal de contato",
+        ["E-mail", "WhatsApp", "E-mail + WhatsApp"],
     )
 
-st.subheader("Script sugerido por cliente")
-cliente = st.selectbox("Selecione um cliente", df["nome"].tolist())
-registro = df[df["nome"] == cliente].iloc[0]
-st.text_area("Mensagem sugerida", registro["script_sugerido"], height=180)
+    lote = df_view[df_view["nome"].isin(selecionados)].copy()
+    qtd_lote = len(lote)
+    valor_lote = float(lote["valor_atraso"].sum()) if not lote.empty else 0.0
+
+    if not lote.empty:
+        email_ok = lote["email"].fillna("").astype(str).str.strip().ne("")
+        whatsapp_ok = lote["telefone"].fillna("").astype(str).str.strip().ne("")
+        consent_ok = lote["consentimento_contato"].fillna("").astype(str).str.strip().str.lower().eq("sim")
+    else:
+        email_ok = pd.Series(dtype=bool)
+        whatsapp_ok = pd.Series(dtype=bool)
+        consent_ok = pd.Series(dtype=bool)
+
+    qtd_email_ok = int(email_ok.sum()) if not lote.empty else 0
+    qtd_whatsapp_ok = int(whatsapp_ok.sum()) if not lote.empty else 0
+    qtd_consent_ok = int(consent_ok.sum()) if not lote.empty else 0
+    qtd_aptos_email = int((email_ok & consent_ok).sum()) if not lote.empty else 0
+    qtd_aptos_whatsapp = int((whatsapp_ok & consent_ok).sum()) if not lote.empty else 0
+
+    if canal_contato == "E-mail":
+        qtd_aptos_canal = qtd_aptos_email
+    elif canal_contato == "WhatsApp":
+        qtd_aptos_canal = qtd_aptos_whatsapp
+    else:
+        qtd_aptos_canal = qtd_aptos_email
+
+    qtd_aptos_email_real = qtd_aptos_email
+
+    if selecionados:
+        registro = df[df["nome"] == selecionados[0]].iloc[0]
+        mensagem_padrao = registro["script_sugerido"]
+        st.caption(
+            f"Lote atual: {qtd_lote} cliente(s) • {moeda(valor_lote)} em atraso • aptos ao canal: {qtd_aptos_canal}"
+        )
+
+        if qtd_aptos_canal < qtd_lote:
+            st.warning("Nem todos os clientes selecionados estão aptos para o canal escolhido. Revise contato e consentimento antes do disparo real.")
+        else:
+            st.success("Lote apto para evolução do disparo real no canal selecionado.")
+
+        mensagem_revisao = st.text_area(
+            "Mensagem para revisão",
+            mensagem_padrao,
+            height=150,
+            key="mensagem_operacional",
+        )
+
+        if "E-mail" in canal_contato:
+            assunto_email = st.text_input(
+                "Assunto do e-mail",
+                value="Regularização de pendência financeira",
+                key="assunto_email_operacional",
+            )
+
+            if qtd_lote > 1:
+                st.caption("No envio real em lote, cada cliente recebe o script individual salvo na base. A mensagem revisada acima vale como referência operacional.")
+
+            missing_smtp = get_missing_smtp_vars()
+            if missing_smtp:
+                st.warning("SMTP ainda não configurado para envio real: " + ", ".join(missing_smtp))
+            else:
+                st.success("SMTP pronto para envio real de e-mail.")
+
+                if canal_contato == "E-mail + WhatsApp":
+                    st.caption("Neste momento, o disparo real cobre apenas o canal de e-mail. O fluxo real de WhatsApp entra na próxima fase.")
+
+                if st.button("Enviar e-mail real para lote apto", use_container_width=True, key="btn_email_real"):
+                    lote_email = lote[(email_ok & consent_ok)].copy()
+
+                    if lote_email.empty:
+                        st.warning("Nenhum cliente apto para envio real de e-mail neste lote.")
+                    else:
+                        recipients = []
+                        auditoria_base = []
+                        timestamp_envio = pd.Timestamp.now()
+                        lote_id = f"email-lote-{timestamp_envio.strftime('%Y%m%d%H%M%S')}"
+
+                        for _, row in lote_email.iterrows():
+                            body = mensagem_revisao if len(lote_email) == 1 else str(row.get("script_sugerido", "")).strip() or mensagem_revisao
+                            recipients.append(
+                                {
+                                    "nome": str(row.get("nome", "")).strip(),
+                                    "email": str(row.get("email", "")).strip(),
+                                    "mensagem": body,
+                                }
+                            )
+                            auditoria_base.append(
+                                {
+                                    "data_hora": timestamp_envio.strftime("%d/%m/%Y %H:%M:%S"),
+                                    "cliente": str(row.get("nome", "")).strip(),
+                                    "destinatario": str(row.get("email", "")).strip(),
+                                    "canal": "E-mail real",
+                                    "assunto": assunto_email,
+                                    "status": "Pendente",
+                                    "detalhe": "",
+                                    "valor": float(row.get("valor_atraso", 0) or 0),
+                                    "lote": lote_id,
+                                    "operador": "Operador sessão",
+                                    "origem": "Acao operacional",
+                                    "template_usado": body,
+                                    "clientes_lote": qtd_lote,
+                                    "aptos_canal": qtd_aptos_email_real,
+                                }
+                            )
+
+                        resultados = send_bulk_emails(
+                            recipients=recipients,
+                            subject=assunto_email,
+                        )
+
+                        auditoria_lote = []
+                        for base, resultado in zip(auditoria_base, resultados):
+                            registro = base.copy()
+                            registro["status"] = "Enviado" if resultado.get("ok") else "Falhou"
+                            registro["detalhe"] = (
+                                "E-mail enviado com sucesso."
+                                if resultado.get("ok")
+                                else str(resultado.get("erro", "Erro desconhecido."))
+                            )
+                            auditoria_lote.append(registro)
+
+                        enviados_ok = sum(1 for item in resultados if item.get("ok"))
+                        falhas = len(resultados) - enviados_ok
+
+                        st.session_state["historico_contatos"] = (
+                            auditoria_lote + st.session_state["historico_contatos"]
+                        )[:200]
+
+                        if enviados_ok:
+                            st.success(f"Envio real concluído: {enviados_ok} e-mail(s) enviados com sucesso.")
+                        if falhas:
+                            erros = [str(item.get("erro", "Erro desconhecido.")) for item in resultados if not item.get("ok")]
+                            st.error(f"{falhas} envio(s) falharam. Revise SMTP ou dados de contato do lote.")
+                            if erros:
+                                st.code("\n".join(erros[:3]))
+
+        if st.button("Registrar disparo simulado", use_container_width=True):
+            novo_registro = {
+                "data_hora": pd.Timestamp.now().strftime("%d/%m/%Y %H:%M:%S"),
+                "cliente": f"Lote com {qtd_lote} cliente(s)",
+                "destinatario": "-",
+                "canal": canal_contato,
+                "assunto": assunto_email if "E-mail" in canal_contato else "-",
+                "status": "Simulado",
+                "detalhe": "Disparo apenas registrado para auditoria operacional.",
+                "valor": valor_lote,
+                "lote": f"simulado-{pd.Timestamp.now().strftime('%Y%m%d%H%M%S')}",
+                "operador": "Operador sessão",
+                "origem": "Acao operacional",
+                "template_usado": mensagem_revisao,
+                "clientes_lote": qtd_lote,
+                "aptos_canal": qtd_aptos_canal,
+            }
+            st.session_state["historico_contatos"] = [novo_registro] + st.session_state["historico_contatos"][:200]
+            st.success(f"Disparo simulado registrado para {qtd_lote} cliente(s) via {canal_contato}.")
+    else:
+        st.info("Selecione um ou mais clientes da carteira para iniciar a ação operacional.")
+
+with op2:
+    st.markdown("#### Resumo do lote")
+    r1, r2 = st.columns(2)
+    with r1:
+        st.metric("Clientes selecionados", qtd_lote)
+        st.metric("WhatsApp pronto", qtd_whatsapp_ok)
+    with r2:
+        st.metric("Valor do lote", moeda(valor_lote))
+        st.metric("E-mail pronto", qtd_email_ok)
+
+    st.caption(f"Consentimento OK: {qtd_consent_ok} • Aptos ao canal: {qtd_aptos_canal}")
+
+    st.markdown("#### Auditoria de contatos")
+    historico = pd.DataFrame(st.session_state["historico_contatos"])
+    if historico.empty:
+        st.caption("Nenhum disparo registrado nesta sessão.")
+    else:
+        colunas_auditoria = [
+            "data_hora",
+            "cliente",
+            "destinatario",
+            "canal",
+            "assunto",
+            "status",
+            "detalhe",
+            "valor",
+            "lote",
+            "operador",
+            "origem",
+            "clientes_lote",
+            "aptos_canal",
+        ]
+        for coluna in colunas_auditoria:
+            if coluna not in historico.columns:
+                historico[coluna] = ""
+
+        historico = historico[colunas_auditoria].copy()
+        historico["valor"] = pd.to_numeric(historico["valor"], errors="coerce").fillna(0.0).apply(moeda)
+        st.dataframe(historico, use_container_width=True, hide_index=True)
+
+with st.expander("Ver top 5 clientes críticos"):
+    top5 = df[df["prioridade"] == "Alta"].copy()
+    top5 = top5.sort_values(by=["ordem_prioridade", "dias_atraso", "valor_atraso"], ascending=[True, False, False]).head(5)
+
+    if top5.empty:
+        st.info("Nenhum cliente em prioridade alta no momento.")
+    else:
+        st.dataframe(
+            top5[["nome", "produto", "valor_atraso", "dias_atraso", "status_cobranca", "proxima_acao"]].style.format({"valor_atraso": moeda}),
+            use_container_width=True,
+        )
