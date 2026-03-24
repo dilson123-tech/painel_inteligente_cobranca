@@ -232,6 +232,61 @@ st.markdown(
 def carregar_dados(csv_path: str, csv_mtime_ns: int):
     return pd.read_csv(csv_path)
 
+AUDITORIA_COLUNAS = [
+    "data_hora",
+    "cliente",
+    "destinatario",
+    "canal",
+    "assunto",
+    "status",
+    "detalhe",
+    "valor",
+    "lote",
+    "operador",
+    "origem",
+    "template_usado",
+    "clientes_lote",
+    "aptos_canal",
+]
+
+def carregar_auditoria(csv_path: str):
+    caminho = Path(csv_path)
+    if not caminho.exists() or caminho.stat().st_size == 0:
+        return pd.DataFrame(columns=AUDITORIA_COLUNAS)
+
+    historico = pd.read_csv(caminho)
+    for coluna in AUDITORIA_COLUNAS:
+        if coluna not in historico.columns:
+            historico[coluna] = ""
+    return historico[AUDITORIA_COLUNAS].copy()
+
+def salvar_auditoria_csv(registros, csv_path: str):
+    if not registros:
+        return []
+
+    caminho = Path(csv_path)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+
+    novos = pd.DataFrame(registros)
+    for coluna in AUDITORIA_COLUNAS:
+        if coluna not in novos.columns:
+            novos[coluna] = ""
+    novos = novos[AUDITORIA_COLUNAS].copy()
+
+    if caminho.exists() and caminho.stat().st_size > 0:
+        historico = pd.read_csv(caminho)
+        for coluna in AUDITORIA_COLUNAS:
+            if coluna not in historico.columns:
+                historico[coluna] = ""
+        historico = historico[AUDITORIA_COLUNAS].copy()
+        combinado = pd.concat([novos, historico], ignore_index=True)
+    else:
+        combinado = novos.copy()
+
+    combinado = combinado[AUDITORIA_COLUNAS].head(5000)
+    combinado.to_csv(caminho, index=False)
+    return combinado.head(200).to_dict("records")
+
 def moeda(valor):
     return f'R$ {valor:,.2f}'.replace(",", "X").replace(".", ",").replace("X", ".")
 
@@ -603,8 +658,10 @@ st.dataframe(
     use_container_width=True,
 )
 
+auditoria_path = "data/auditoria_contatos.csv"
+
 if "historico_contatos" not in st.session_state:
-    st.session_state["historico_contatos"] = []
+    st.session_state["historico_contatos"] = carregar_auditoria(auditoria_path).head(200).to_dict("records")
 
 st.subheader("Ação operacional")
 op1, op2 = st.columns([1.2, 0.8])
@@ -743,9 +800,10 @@ with op1:
                         enviados_ok = sum(1 for item in resultados if item.get("ok"))
                         falhas = len(resultados) - enviados_ok
 
-                        st.session_state["historico_contatos"] = (
-                            auditoria_lote + st.session_state["historico_contatos"]
-                        )[:200]
+                        st.session_state["historico_contatos"] = salvar_auditoria_csv(
+                            auditoria_lote,
+                            auditoria_path,
+                        )
 
                         if enviados_ok:
                             st.success(f"Envio real concluído: {enviados_ok} e-mail(s) enviados com sucesso.")
@@ -772,7 +830,10 @@ with op1:
                 "clientes_lote": qtd_lote,
                 "aptos_canal": qtd_aptos_canal,
             }
-            st.session_state["historico_contatos"] = [novo_registro] + st.session_state["historico_contatos"][:200]
+            st.session_state["historico_contatos"] = salvar_auditoria_csv(
+                [novo_registro],
+                auditoria_path,
+            )
             st.success(f"Disparo simulado registrado para {qtd_lote} cliente(s) via {canal_contato}.")
     else:
         st.info("Selecione um ou mais clientes da carteira para iniciar a ação operacional.")
@@ -794,21 +855,7 @@ with op2:
     if historico.empty:
         st.caption("Nenhum disparo registrado nesta sessão.")
     else:
-        colunas_auditoria = [
-            "data_hora",
-            "cliente",
-            "destinatario",
-            "canal",
-            "assunto",
-            "status",
-            "detalhe",
-            "valor",
-            "lote",
-            "operador",
-            "origem",
-            "clientes_lote",
-            "aptos_canal",
-        ]
+        colunas_auditoria = AUDITORIA_COLUNAS.copy()
         for coluna in colunas_auditoria:
             if coluna not in historico.columns:
                 historico[coluna] = ""
