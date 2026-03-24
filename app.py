@@ -78,6 +78,149 @@ st.markdown(
         margin-bottom: 1.2rem;
         max-width: 980px;
     }
+    .block-container {
+        padding-top: 0.9rem;
+        padding-bottom: 2rem;
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+        max-width: 1680px;
+    }
+    div[data-testid="stAppViewContainer"] > .main {
+        padding-top: 0;
+    }
+    header[data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stStatusWidget"],
+    #MainMenu,
+    footer {
+        display: none !important;
+    }
+    h3 {
+        font-size: 1.7rem !important;
+        font-weight: 800 !important;
+        color: #f5f7fa !important;
+        margin-top: 1.35rem !important;
+        margin-bottom: 0.7rem !important;
+        letter-spacing: -0.02em;
+    }
+    div[data-testid="stWidgetLabel"] p {
+        color: #a8bdd2 !important;
+        font-size: 0.88rem !important;
+        font-weight: 600 !important;
+    }
+    div[data-baseweb="select"] > div {
+        background: linear-gradient(180deg, #0f1f31 0%, #0b1726 100%) !important;
+        border: 1px solid rgba(200, 169, 107, 0.18) !important;
+        border-radius: 12px !important;
+        min-height: 46px !important;
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+    }
+    div[data-baseweb="select"] span {
+        color: #f5f7fa !important;
+        font-weight: 600 !important;
+    }
+    .stTextArea textarea {
+        background: linear-gradient(180deg, #0f1f31 0%, #0b1726 100%) !important;
+        color: #f5f7fa !important;
+        border: 1px solid rgba(200, 169, 107, 0.16) !important;
+        border-radius: 14px !important;
+        min-height: 130px !important;
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+    }
+    div[data-testid="stDataFrame"] {
+        border: 1px solid rgba(200, 169, 107, 0.14);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+        background: linear-gradient(180deg, #0b1726 0%, #091321 100%);
+    }
+    div[data-testid="stDataFrame"] [role="grid"] {
+        background: transparent !important;
+    }
+    div[data-testid="stDataFrame"] [role="columnheader"] {
+        background: rgba(255, 255, 255, 0.03) !important;
+    }
+
+    .stTextArea textarea {
+        font-size: 0.96rem !important;
+        line-height: 1.65 !important;
+        padding: 1rem 1.1rem !important;
+    }
+
+    .aging-card {
+        background: linear-gradient(180deg, #101f31 0%, #0b1726 100%);
+        border: 1px solid rgba(200, 169, 107, 0.16);
+        border-radius: 16px;
+        padding: 18px 18px 16px 18px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+        min-height: 118px;
+    }
+    .aging-title {
+        color: #f5f7fa;
+        font-weight: 800;
+        font-size: 1rem;
+        margin-bottom: 0.55rem;
+    }
+    .aging-meta {
+        color: #9fb3c8;
+        font-size: 0.88rem;
+        margin-bottom: 0.22rem;
+    }
+    .aging-value {
+        color: #f5f7fa;
+        font-size: 1.35rem;
+        font-weight: 800;
+        margin-top: 0.5rem;
+    }
+
+    .pipeline-card {
+        position: relative;
+        background: linear-gradient(180deg, #101f31 0%, #0b1726 100%);
+        border: 1px solid rgba(200, 169, 107, 0.16);
+        border-radius: 16px;
+        padding: 18px 16px 16px 16px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+        min-height: 118px;
+        overflow: hidden;
+    }
+    .pipeline-chip {
+        width: 44px;
+        height: 4px;
+        border-radius: 999px;
+        margin-bottom: 0.8rem;
+    }
+    .pipeline-title {
+        color: #f5f7fa;
+        font-weight: 800;
+        font-size: 0.96rem;
+        line-height: 1.2;
+        margin-bottom: 0.45rem;
+    }
+    .pipeline-meta {
+        color: #9fb3c8;
+        font-size: 0.86rem;
+        margin-bottom: 0.2rem;
+    }
+    .pipeline-value {
+        color: #f5f7fa;
+        font-size: 1.2rem;
+        font-weight: 800;
+        margin-top: 0.55rem;
+    }
+    .pipeline-note {
+        color: #b8c7d8;
+        font-size: 0.92rem;
+        margin-top: 0.45rem;
+        margin-bottom: 0.2rem;
+    }
+
+    .product-note {
+        color: #b8c7d8;
+        font-size: 0.92rem;
+        margin-top: 0.45rem;
+        margin-bottom: 0.2rem;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -225,6 +368,57 @@ valor_sem_resposta = df.loc[df["status_cobranca"] == "Sem resposta", "valor_atra
 clientes_negociando = int((df["status_cobranca"] == "Negociando").sum())
 clientes_sem_resposta = int((df["status_cobranca"] == "Sem resposta").sum())
 
+
+aging_resumo = (
+    df.groupby("faixa_atraso", as_index=False)
+      .agg(clientes=("nome", "count"), valor=("valor_atraso", "sum"))
+)
+aging_ordem = ["Atraso crítico", "Atraso moderado", "Atraso leve"]
+aging_resumo["faixa_atraso"] = pd.Categorical(
+    aging_resumo["faixa_atraso"],
+    categories=aging_ordem,
+    ordered=True,
+)
+aging_resumo = aging_resumo.sort_values("faixa_atraso")
+
+
+status_resumo = (
+    df.groupby("status_cobranca", as_index=False)
+      .agg(clientes=("nome", "count"), valor=("valor_atraso", "sum"))
+)
+
+status_map = {
+    row["status_cobranca"]: {
+        "clientes": int(row["clientes"]),
+        "valor": float(row["valor"]),
+    }
+    for _, row in status_resumo.iterrows()
+}
+
+status_cards = [
+    "Sem contato",
+    "Sem resposta",
+    "Negociando",
+    "Prometeu pagar",
+    "Encaminhar para análise",
+]
+
+status_palette = {
+    "Sem contato": "#6b7280",
+    "Sem resposta": "#c68a12",
+    "Negociando": "#1d9b6c",
+    "Prometeu pagar": "#2fbf71",
+    "Encaminhar para análise": "#d14b4b",
+}
+
+
+produto_resumo = (
+    df.groupby("produto", as_index=False)
+      .agg(clientes=("nome", "count"), valor=("valor_atraso", "sum"))
+      .sort_values("valor", ascending=False)
+      .head(4)
+)
+
 st.markdown('<div class="hero-kicker">Recovery Intelligence Suite</div>', unsafe_allow_html=True)
 st.markdown('<div class="hero-title">Painel Inteligente de Cobrança</div>', unsafe_allow_html=True)
 st.markdown(
@@ -285,6 +479,91 @@ with o2:
     render_insight(f"As promessas ativas somam <strong>{moeda(valor_promessas)}</strong>, com alto potencial de conversão em curto prazo.")
 with o3:
     render_insight(f"Os casos sem resposta concentram <strong>{moeda(valor_sem_resposta)}</strong> e pedem ajuste de canal ou abordagem.")
+
+
+
+
+st.subheader("Exposição por produto")
+pr1, pr2, pr3, pr4 = st.columns(4)
+
+for col, (_, row) in zip([pr1, pr2, pr3, pr4], produto_resumo.iterrows()):
+    with col:
+        st.markdown(
+            f"""
+            <div class="aging-card">
+                <div class="aging-title">{row['produto']}</div>
+                <div class="aging-meta">Clientes: <strong>{int(row['clientes'])}</strong></div>
+                <div class="aging-meta">Participação: <strong>{(float(row['valor']) / float(df["valor_atraso"].sum()) * 100 if float(df["valor_atraso"].sum()) else 0):.1f}%</strong></div>
+                <div class="aging-value">{moeda(float(row['valor']))}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+produto_top = produto_resumo.iloc[0] if not produto_resumo.empty else None
+if produto_top is not None:
+    st.markdown(
+        f"""
+        <div class="product-note">
+            Maior exposição atual em <strong>{produto_top['produto']}</strong>,
+            concentrando <strong>{moeda(float(produto_top['valor']))}</strong> da carteira em atraso.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.subheader("Pipeline operacional")
+p1, p2, p3, p4, p5 = st.columns(5)
+
+for col, status_nome in zip([p1, p2, p3, p4, p5], status_cards):
+    item = status_map.get(status_nome, {"clientes": 0, "valor": 0.0})
+    color = status_palette.get(status_nome, "#c8a96b")
+    with col:
+        st.markdown(
+            f"""
+            <div class="pipeline-card">
+                <div class="pipeline-chip" style="background:{color};"></div>
+                <div class="pipeline-title">{status_nome}</div>
+                <div class="pipeline-meta">Clientes: <strong>{item['clientes']}</strong></div>
+                <div class="pipeline-value">{moeda(float(item['valor']))}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+maior_status = max(
+    status_cards,
+    key=lambda nome: status_map.get(nome, {"valor": 0.0})["valor"]
+)
+maior_item = status_map.get(maior_status, {"clientes": 0, "valor": 0.0})
+
+st.markdown(
+    f"""
+    <div class="pipeline-note">
+        Maior concentração operacional no momento: <strong>{maior_status}</strong> —
+        <strong>{maior_item['clientes']}</strong> cliente(s), totalizando
+        <strong>{moeda(float(maior_item['valor']))}</strong>.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.subheader("Aging da carteira")
+a1, a2, a3 = st.columns(3)
+
+for col, (_, row) in zip([a1, a2, a3], aging_resumo.iterrows()):
+    with col:
+        st.markdown(
+            f"""
+            <div class="aging-card">
+                <div class="aging-title">{row['faixa_atraso']}</div>
+                <div class="aging-meta">Clientes: <strong>{int(row['clientes'])}</strong></div>
+                <div class="aging-meta">Participação: <strong>{(int(row['clientes']) / total_clientes * 100 if total_clientes else 0):.1f}%</strong></div>
+                <div class="aging-value">{moeda(float(row['valor']))}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 st.subheader("Carteira priorizada")
 f1, f2, f3 = st.columns(3)
