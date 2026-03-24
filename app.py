@@ -861,8 +861,36 @@ with op2:
                 historico[coluna] = ""
 
         historico = historico[colunas_auditoria].copy()
-        historico["valor"] = pd.to_numeric(historico["valor"], errors="coerce").fillna(0.0).apply(moeda)
-        st.dataframe(historico, use_container_width=True, hide_index=True)
+        historico["valor"] = pd.to_numeric(historico["valor"], errors="coerce").fillna(0.0)
+        historico["status"] = historico["status"].astype(str).fillna("")
+        historico["canal"] = historico["canal"].astype(str).fillna("")
+
+        total_registros = len(historico)
+        total_enviados = int((historico["status"] == "Enviado").sum())
+        total_falhas = int((historico["status"] == "Falhou").sum())
+        total_simulados = int((historico["status"] == "Simulado").sum())
+        taxa_sucesso = (total_enviados / (total_enviados + total_falhas) * 100) if (total_enviados + total_falhas) else 0.0
+        valor_auditado = float(historico["valor"].sum())
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("Registros auditados", total_registros)
+            st.metric("Enviados", total_enviados)
+        with c2:
+            st.metric("Falhas", total_falhas)
+            st.metric("Simulados", total_simulados)
+        with c3:
+            st.metric("Taxa de sucesso", f"{taxa_sucesso:.1f}%")
+            st.metric("Valor auditado", moeda(valor_auditado))
+
+        canais = historico["canal"].value_counts()
+        if not canais.empty:
+            resumo_canais = " • ".join(f"{canal}: {quantidade}" for canal, quantidade in canais.items())
+            st.caption(f"Distribuição por canal: {resumo_canais}")
+
+        historico_view = historico.copy()
+        historico_view["valor"] = historico_view["valor"].apply(moeda)
+        st.dataframe(historico_view, use_container_width=True, hide_index=True)
 
 with st.expander("Ver top 5 clientes críticos"):
     top5 = df[df["prioridade"] == "Alta"].copy()
