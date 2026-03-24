@@ -888,8 +888,43 @@ with op2:
             resumo_canais = " • ".join(f"{canal}: {quantidade}" for canal, quantidade in canais.items())
             st.caption(f"Distribuição por canal: {resumo_canais}")
 
-        historico_view = historico.copy()
+        status_opcoes = ["Todos"] + sorted([s for s in historico["status"].dropna().astype(str).unique().tolist() if s])
+        canal_opcoes = ["Todos"] + sorted([c for c in historico["canal"].dropna().astype(str).unique().tolist() if c])
+        lote_opcoes = ["Todos"] + sorted([l for l in historico["lote"].dropna().astype(str).unique().tolist() if l])
+
+        f1, f2, f3 = st.columns(3)
+        with f1:
+            filtro_status = st.selectbox("Filtrar por status", status_opcoes, key="audit_filter_status")
+        with f2:
+            filtro_canal = st.selectbox("Filtrar por canal", canal_opcoes, key="audit_filter_canal")
+        with f3:
+            filtro_lote = st.selectbox("Filtrar por lote", lote_opcoes, key="audit_filter_lote")
+
+        historico_filtrado = historico.copy()
+        if filtro_status != "Todos":
+            historico_filtrado = historico_filtrado[historico_filtrado["status"] == filtro_status]
+        if filtro_canal != "Todos":
+            historico_filtrado = historico_filtrado[historico_filtrado["canal"] == filtro_canal]
+        if filtro_lote != "Todos":
+            historico_filtrado = historico_filtrado[historico_filtrado["lote"] == filtro_lote]
+
+        st.caption(f"Registros no recorte atual: {len(historico_filtrado)}")
+
+        historico_export = historico_filtrado.copy()
+        historico_export["valor"] = historico_export["valor"].fillna(0.0)
+
+        historico_view = historico_filtrado.copy()
         historico_view["valor"] = historico_view["valor"].apply(moeda)
+
+        st.download_button(
+            "Exportar auditoria filtrada (CSV)",
+            data=historico_export.to_csv(index=False).encode("utf-8"),
+            file_name="auditoria_contatos_filtrada.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="btn_exportar_auditoria_csv",
+        )
+
         st.dataframe(historico_view, use_container_width=True, hide_index=True)
 
 with st.expander("Ver top 5 clientes críticos"):
