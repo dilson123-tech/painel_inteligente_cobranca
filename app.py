@@ -2,6 +2,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from src.mailer import get_missing_smtp_vars, send_bulk_emails
+from src.whatsapp import send_bulk_whatsapp_simulated
 
 st.set_page_config(page_title="Painel Inteligente de Cobrança", layout="wide")
 
@@ -703,6 +704,7 @@ with op1:
         qtd_aptos_canal = qtd_aptos_email
 
     qtd_aptos_email_real = qtd_aptos_email
+    qtd_aptos_whatsapp_real = qtd_aptos_whatsapp
 
     if selecionados:
         registro = df[df["nome"] == selecionados[0]].iloc[0]
@@ -740,7 +742,7 @@ with op1:
                 st.success("SMTP pronto para envio real de e-mail.")
 
                 if canal_contato == "E-mail + WhatsApp":
-                    st.caption("Neste momento, o disparo real cobre apenas o canal de e-mail. O fluxo real de WhatsApp entra na próxima fase.")
+                    st.caption("Neste momento, o disparo real cobre apenas o canal de e-mail. O WhatsApp já está disponível em modo simulado validado para auditoria.")
 
                 if st.button("Enviar e-mail real para lote apto", use_container_width=True, key="btn_email_real"):
                     lote_email = lote[(email_ok & consent_ok)].copy()
@@ -812,6 +814,84 @@ with op1:
                             st.error(f"{falhas} envio(s) falharam. Revise SMTP ou dados de contato do lote.")
                             if erros:
                                 st.code("\n".join(erros[:3]))
+
+        if "WhatsApp" in canal_contato:
+            if qtd_lote > 1:
+                st.caption("No fluxo de WhatsApp, cada cliente recebe o script individual salvo na base. A mensagem revisada acima vale como referência operacional.")
+
+            st.info("WhatsApp está em modo simulado validado para auditoria operacional. A integração com provedor real entra na próxima fase.")
+
+            if st.button("Simular WhatsApp para lote apto", use_container_width=True, key="btn_whatsapp_simulado"):
+                lote_whatsapp = lote[(whatsapp_ok & consent_ok)].copy()
+
+                if lote_whatsapp.empty:
+                    st.warning("Nenhum cliente apto para WhatsApp neste lote.")
+                else:
+                    recipients = []
+                    auditoria_base = []
+                    timestamp_envio = pd.Timestamp.now()
+                    lote_id = f"whatsapp-sim-{timestamp_envio.strftime('%Y%m%d%H%M%S')}"
+
+                    for _, row in lote_whatsapp.iterrows():
+                        body = mensagem_revisao if len(lote_whatsapp) == 1 else str(row.get("script_sugerido", "")).strip() or mensagem_revisao
+                        recipients.append(
+                            {
+                                "nome": str(row.get("nome", "")).strip(),
+                                "telefone": str(row.get("telefone", "")).strip(),
+                                "mensagem": body,
+                            }
+                        )
+                        auditoria_base.append(
+                            {
+                                "data_hora": timestamp_envio.strftime("%d/%m/%Y %H:%M:%S"),
+                                "cliente": str(row.get("nome", "")).strip(),
+                                "destinatario": str(row.get("telefone", "")).strip(),
+                                "canal": "WhatsApp simulado",
+                                "assunto": "-",
+                                "status": "Pendente",
+                                "detalhe": "",
+                                "valor": float(row.get("valor_atraso", 0) or 0),
+                                "lote": lote_id,
+                                "operador": "Operador sessão",
+                                "origem": "Acao operacional",
+                                "template_usado": body,
+                                "clientes_lote": qtd_lote,
+                                "aptos_canal": qtd_aptos_whatsapp_real,
+                            }
+                        )
+
+                    resultados = send_bulk_whatsapp_simulated(
+                        recipients=recipients,
+                        message_template=mensagem_revisao,
+                    )
+
+                    auditoria_lote = []
+                    for base, resultado in zip(auditoria_base, resultados):
+                        registro = base.copy()
+                        registro["destinatario"] = resultado.get("telefone_formatado") or resultado.get("telefone") or registro["destinatario"]
+                        if resultado.get("ok"):
+                            registro["status"] = "Simulado"
+                            registro["detalhe"] = "WhatsApp validado em modo simulado para auditoria operacional."
+                        else:
+                            registro["status"] = "Falhou"
+                            registro["detalhe"] = str(resultado.get("erro", "Erro desconhecido."))
+                        auditoria_lote.append(registro)
+
+                    simulados_ok = sum(1 for item in resultados if item.get("ok"))
+                    falhas = len(resultados) - simulados_ok
+
+                    st.session_state["historico_contatos"] = salvar_auditoria_csv(
+                        auditoria_lote,
+                        auditoria_path,
+                    )
+
+                    if simulados_ok:
+                        st.success(f"Simulação de WhatsApp concluída: {simulados_ok} contato(s) validados.")
+                    if falhas:
+                        erros = [str(item.get("erro", "Erro desconhecido.")) for item in resultados if not item.get("ok")]
+                        st.error(f"{falhas} contato(s) falharam na validação do WhatsApp.")
+                        if erros:
+                            st.code("\n".join(erros[:3]))
 
         if st.button("Registrar disparo simulado", use_container_width=True):
             novo_registro = {
