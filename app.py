@@ -2,6 +2,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from src.mailer import get_missing_smtp_vars, send_bulk_emails
+from src.recebimentos import carregar_recebimentos, aplicar_conciliacao_automatica
 from src.whatsapp import send_bulk_whatsapp_simulated
 
 st.set_page_config(page_title="Painel Inteligente de Cobrança", layout="wide")
@@ -393,6 +394,10 @@ csv_path = "data/clientes_exemplo.csv"
 csv_mtime_ns = Path(csv_path).stat().st_mtime_ns
 df = carregar_dados(csv_path, csv_mtime_ns)
 
+recebimentos_path = "data/recebimentos.csv"
+df_recebimentos = carregar_recebimentos(recebimentos_path)
+df = aplicar_conciliacao_automatica(df, df_recebimentos)
+
 for coluna, valor_padrao in {
     "email": "",
     "telefone": "",
@@ -640,6 +645,8 @@ filtro_status = f2.selectbox("Filtrar status", ["Todos"] + sorted(df["status_cob
 filtro_faixa = f3.selectbox("Filtrar faixa de atraso", ["Todas", "Atraso leve", "Atraso moderado", "Atraso crítico"])
 
 df_view = df.copy()
+if "bloquear_cobranca" in df_view.columns:
+    df_view = df_view[~df_view["bloquear_cobranca"].fillna(False).astype(bool)]
 if filtro_prioridade != "Todas":
     df_view = df_view[df_view["prioridade"] == filtro_prioridade]
 if filtro_status != "Todos":

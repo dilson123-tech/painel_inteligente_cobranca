@@ -7,3 +7,6 @@ __pycache__/
 data/auditoria_contatos.csv
 *.bak
 *.bak.*
+
+data/recebimentos.csv
+data/clientes_exemplo.csv
